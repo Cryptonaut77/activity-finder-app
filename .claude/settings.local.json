@@ -13,7 +13,19 @@
       "Bash(npm install)",
       "Bash(npm install:*)",
       "Bash(cat:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(.venvScriptsactivate.bat)",
+      "Bash(pnpm install:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(cp:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(dir)",
+      "Bash(dir activity-finder)",
+      "Bash(pnpm --prefix activity-finder install)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(venv/Scripts/python:*)",
+      "Bash(npm run lint)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
