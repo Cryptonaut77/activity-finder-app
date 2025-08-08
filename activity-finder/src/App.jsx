@@ -4,6 +4,9 @@ import { Input } from '@/components/ui/input.jsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.jsx'
 import { Badge } from '@/components/ui/badge.jsx'
 import { ThemeToggle } from '@/components/ui/theme-toggle.jsx'
+import { ActivitySkeleton, ActivitySkeletonGrid } from '@/components/ActivitySkeleton.jsx'
+import { SearchFilters } from '@/components/SearchFilters.jsx'
+import { ActivityModal } from '@/components/ActivityModal.jsx'
 import { Search, MapPin, Calendar, Clock, ExternalLink, Loader2, Sparkles } from 'lucide-react'
 import heroBackground from './assets/hero-background.jpg'
 import './App.css'
@@ -16,6 +19,9 @@ function App() {
   const [hasSearched, setHasSearched] = useState(false)
   const [error, setError] = useState('')
   const [isPageLoaded, setIsPageLoaded] = useState(false)
+  const [filters, setFilters] = useState({ categories: [], timeFilter: null })
+  const [selectedActivity, setSelectedActivity] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleSearch = async () => {
     if (!searchQuery.trim() || !location.trim()) return
@@ -68,11 +74,7 @@ function App() {
     }
   }
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch()
-    }
-  }
+
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Date TBD'
@@ -105,6 +107,74 @@ function App() {
   useEffect(() => {
     setIsPageLoaded(true)
   }, [])
+
+  const handleQuickSearch = (query, loc) => {
+    setSearchQuery(query)
+    setLocation(loc)
+    // Automatically trigger search
+    setTimeout(() => {
+      handleSearchWithFilters(query, loc, filters)
+    }, 100)
+  }
+
+  const handleActivityClick = (activity) => {
+    setSelectedActivity(activity)
+    setIsModalOpen(true)
+  }
+
+  const handleSearchWithFilters = async (query = searchQuery, loc = location, currentFilters = filters) => {
+    if (!query.trim() || !loc.trim()) return
+    
+    // Add input validation
+    if (query.trim().length < 2) {
+      setError('Please enter at least 2 characters for your search')
+      return
+    }
+    
+    if (loc.trim().length < 2) {
+      setError('Please enter at least 2 characters for location')
+      return
+    }
+    
+    setIsLoading(true)
+    setHasSearched(true)
+    setError('')
+    
+    try {
+      const searchBody = {
+        query: query.trim(),
+        location: loc.trim(),
+        filters: currentFilters
+      }
+
+      const response = await fetch('/api/activities/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(searchBody)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setActivities(data.activities || [])
+      } else {
+        throw new Error(data.error || 'Failed to fetch activities')
+      }
+      
+    } catch (error) {
+      console.error('Error fetching activities:', error)
+      setError('Failed to fetch activities. Please try again.')
+      setActivities([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Show loading screen until page is loaded
   if (!isPageLoaded) {
@@ -161,7 +231,7 @@ function App() {
                     placeholder="What interests you? (music, food, tech...)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearchWithFilters()}
                     className="pl-12 h-14 text-base bg-background border-2 border-border focus:border-primary rounded-xl"
                   />
                 </div>
@@ -172,13 +242,13 @@ function App() {
                     placeholder="Where? (New York, San Francisco...)"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearchWithFilters()}
                     className="pl-12 h-14 text-base bg-background border-2 border-border focus:border-primary rounded-xl"
                   />
                 </div>
               </div>
               <Button 
-                onClick={handleSearch}
+                onClick={() => handleSearchWithFilters()}
                 disabled={isLoading || !searchQuery.trim() || !location.trim()}
                 className="w-full h-14 text-lg font-semibold eventbrite-hero-gradient hover:opacity-90 transition-all duration-300 rounded-xl shadow-lg"
               >
@@ -215,6 +285,22 @@ function App() {
                 </p>
               )}
             </div>
+
+            {/* Search Filters */}
+            {!error && (
+              <div className="mb-8">
+                <SearchFilters 
+                  filters={filters}
+                  onFiltersChange={(newFilters) => {
+                    setFilters(newFilters)
+                    if (hasSearched && !isLoading) {
+                      handleSearchWithFilters(searchQuery, location, newFilters)
+                    }
+                  }}
+                  onQuickSearch={handleQuickSearch}
+                />
+              </div>
+            )}
             
             {error && (
               <div className="text-center py-12">
@@ -230,14 +316,15 @@ function App() {
             )}
             
             {isLoading ? (
-              <div className="flex flex-col justify-center items-center py-20">
-                <div className="animate-spin rounded-full h-20 w-20 border-b-4 border-primary mb-6"></div>
-                <p className="text-muted-foreground text-lg">Finding the best events just for you...</p>
-              </div>
+              <ActivitySkeletonGrid count={6} />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                 {activities.map((activity) => (
-                  <Card key={activity.id} className="group overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 hover:scale-105 eventbrite-card-gradient border-2 border-border/50 hover:border-primary/50">
+                  <Card 
+                    key={activity.id} 
+                    className="group overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 hover:scale-105 eventbrite-card-gradient border-2 border-border/50 hover:border-primary/50 cursor-pointer"
+                    onClick={() => handleActivityClick(activity)}
+                  >
                     <div className="relative h-56 bg-muted overflow-hidden">
                       <img 
                         src={activity.image || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop'} 
@@ -282,7 +369,10 @@ function App() {
                       </div>
                       <Button 
                         className="w-full h-12 rounded-xl font-semibold eventbrite-hero-gradient hover:opacity-90 transition-all duration-300 shadow-lg" 
-                        onClick={() => window.open(activity.link, '_blank', 'noopener,noreferrer')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          window.open(activity.link, '_blank', 'noopener,noreferrer')
+                        }}
                       >
                         <ExternalLink className="h-5 w-5 mr-2" />
                         Get Tickets
@@ -330,6 +420,13 @@ function App() {
           </div>
         </div>
       </footer>
+
+      {/* Activity Modal */}
+      <ActivityModal 
+        activity={selectedActivity}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   )
 }
